@@ -7,6 +7,7 @@ from app.repositories import settings as settings_repo
 from app.repositories import events as event_repo
 from app.repositories import facts as fact_repo
 from app.repositories import campaigns as camp_repo
+from app.services import tag_service
 
 
 def list_campaigns() -> list[dict[str, Any]]:
@@ -17,16 +18,26 @@ def list_campaigns() -> list[dict[str, Any]]:
         conn.close()
 
 
-def list_events(business_day: str | None = None) -> list[dict[str, Any]]:
+def list_events(business_day: str | None = None, tag: str | None = None) -> list[dict[str, Any]]:
+    norm_tag = tag_service.normalize_tag(tag)
     conn = connect()
     try:
         day = business_day or settings_repo.get(conn, "business_day")
-        return event_repo.list_events(conn, day)
+        return event_repo.list_events(conn, day, tag=norm_tag)
+    finally:
+        conn.close()
+
+
+def list_tags() -> list[str]:
+    conn = connect()
+    try:
+        return event_repo.distinct_tags(conn)
     finally:
         conn.close()
 
 
 def add_event(body: dict[str, Any]) -> dict[str, Any]:
+    tag = tag_service.normalize_tag(body.get("tag")) or ""
     conn = connect(immediate=True)
     try:
         day = body.get("business_day") or settings_repo.get(conn, "business_day")
@@ -37,8 +48,10 @@ def add_event(body: dict[str, Any]) -> dict[str, Any]:
         camp = (body.get("campaign_code") or "").strip()
         if not code or not camp:
             raise HTTPException(400, "coupon_code / campaign_code 必填")
-        if et == "redeem" and fact_repo.day_is_sealed(conn, day):
-            raise HTTPException(409, f"业务日 {day} 核销已钉扎，禁止再写入核销")
+        if et == "redeem":
+            # Any sealed tag-subset batch closes the whole day.  The check is
+            # tag-agnostic on purpose: even a different tag cannot be written.
+            tag_service.assert_day_open(conn, day, "再写入核销")
         amount = float(body.get("amount") or 0)
         if et == "redeem" and amount <= 0:
             # default face value from campaign
@@ -55,6 +68,7 @@ def add_event(body: dict[str, Any]) -> dict[str, Any]:
             business_day=day,
             occurred_at=occurred,
             note=body.get("note") or "",
+            tag=tag,
         )
         fact_id = None
         if et == "redeem":
@@ -67,10 +81,11 @@ def add_event(body: dict[str, Any]) -> dict[str, Any]:
                     business_day=day,
                     event_id=eid,
                     status="open",
+                    tag=tag,
                 )
             except Exception as e:
                 raise HTTPException(409, f"核销事实写入失败（可能券码已核销）: {e}") from e
         conn.commit()
-        return {"event_id": eid, "fact_id": fact_id, "business_day": day}
+        return {"event_id": eid, "fact_id": fact_id, "business_day": day, "tag": tag}
     finally:
         conn.close()

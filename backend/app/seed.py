@@ -1,5 +1,5 @@
 from __future__ import annotations
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from app.db import connect, init_db
 
 
@@ -25,26 +25,27 @@ def seed_if_empty() -> None:
                 "INSERT INTO campaigns(code, title, face_value, min_spend) VALUES(?,?,?,?)",
                 (code, title, face, mn),
             )
-        # issue + redeem events for today and yesterday
+        # issue + redeem events for today and yesterday.  Tags stand for the
+        # channel/scene the redeem happened in, not the campaign.
         yday = (date.today() - timedelta(days=1)).isoformat()
         rows = [
-            ("issue", "C-1001", "NEW10", 0, today, f"{today}T09:00:00"),
-            ("issue", "C-1002", "VIP20", 0, today, f"{today}T09:10:00"),
-            ("issue", "C-1003", "TEA5", 0, today, f"{today}T09:20:00"),
-            ("redeem", "C-1001", "NEW10", 10, today, f"{today}T12:00:00"),
-            ("redeem", "C-1002", "VIP20", 20, today, f"{today}T12:30:00"),
-            ("issue", "C-0901", "NEW10", 0, yday, f"{yday}T10:00:00"),
-            ("redeem", "C-0901", "NEW10", 10, yday, f"{yday}T18:00:00"),
+            ("issue", "C-1001", "NEW10", 0, today, f"{today}T09:00:00", "store"),
+            ("issue", "C-1002", "VIP20", 0, today, f"{today}T09:10:00", "app"),
+            ("issue", "C-1003", "TEA5", 0, today, f"{today}T09:20:00", "mini"),
+            ("redeem", "C-1001", "NEW10", 10, today, f"{today}T12:00:00", "store"),
+            ("redeem", "C-1002", "VIP20", 20, today, f"{today}T12:30:00", "app"),
+            ("issue", "C-0901", "NEW10", 0, yday, f"{yday}T10:00:00", "store"),
+            ("redeem", "C-0901", "NEW10", 10, yday, f"{yday}T18:00:00", "store"),
         ]
-        for et, cc, camp, amt, day, at in rows:
+        for et, cc, camp, amt, day, at, tag in rows:
             cur = conn.execute(
-                "INSERT INTO coupon_events(event_type, coupon_code, campaign_code, amount, business_day, occurred_at) VALUES(?,?,?,?,?,?)",
-                (et, cc, camp, amt, day, at),
+                "INSERT INTO coupon_events(event_type, coupon_code, campaign_code, amount, business_day, occurred_at, tag) VALUES(?,?,?,?,?,?,?)",
+                (et, cc, camp, amt, day, at, tag),
             )
             if et == "redeem":
                 conn.execute(
-                    "INSERT INTO redeem_facts(coupon_code, campaign_code, amount, business_day, event_id, status) VALUES(?,?,?,?,?, 'open')",
-                    (cc, camp, amt, day, cur.lastrowid),
+                    "INSERT INTO redeem_facts(coupon_code, campaign_code, amount, business_day, event_id, status, tag) VALUES(?,?,?,?,?, 'open', ?)",
+                    (cc, camp, amt, day, cur.lastrowid, tag),
                 )
         conn.commit()
     finally:

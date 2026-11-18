@@ -11,9 +11,14 @@ def campaigns():
     return svc.list_campaigns()
 
 
+@router.get("/tags")
+def tags():
+    return svc.list_tags()
+
+
 @router.get("/events")
-def events(business_day: str | None = Query(None)):
-    return svc.list_events(business_day)
+def events(business_day: str | None = Query(None), tag: str | None = Query(None)):
+    return svc.list_events(business_day, tag)
 
 
 @router.post("/events")

@@ -5,9 +5,9 @@ import { useRoute } from 'vue-router'
 const route = useRoute()
 const chips = [
   { to: '/', label: '总览', tip: '今日票根' },
-  { to: '/events', label: '券事件', tip: '发放·核销·作废' },
-  { to: '/redeem', label: '核销钉扎', tip: '事实→批次' },
-  { to: '/batches', label: '钉扎批次', tip: '已钉集合' },
+  { to: '/events', label: '券事件', tip: '发放·核销·作废 · tag' },
+  { to: '/redeem', label: '核销钉扎', tip: 'tag 子集 → 批次' },
+  { to: '/batches', label: '钉扎批次', tip: '快照 tag · 遗留' },
   { to: '/settings', label: '设置', tip: '业务日' },
 ]
 function on(to) {
